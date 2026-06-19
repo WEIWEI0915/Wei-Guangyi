@@ -84,7 +84,4 @@ CREATE TABLE Grades (
 
 ## 项目 Clone 地址
 
-<!-- 作业提交时需填入实际仓库地址 -->
-<!-- 例如：git@gitee.com:yourname/StudentGradeManager.git -->
-
-> 本仓库地址：_[请在此填写你的 Gitee 仓库地址]_
+> 本仓库地址：https://github.com/WEIWEI0915/Wei-Guangyi.git
