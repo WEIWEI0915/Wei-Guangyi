@@ -329,9 +329,9 @@ public class DatabaseHelper
 
     // ===== Statistics =====
 
-    public List<Grade> GetGradeStatsByCourse()
+    public List<CourseStatsDto> GetGradeStatsByCourse()
     {
-        var list = new List<Grade>();
+        var list = new List<CourseStatsDto>();
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
         var cmd = conn.CreateCommand();
@@ -347,19 +347,21 @@ public class DatabaseHelper
             """;
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
-            list.Add(new Grade
+            list.Add(new CourseStatsDto
             {
                 CourseId = reader["CourseId"].ToString()!,
                 CourseName = reader["CourseName"].ToString()!,
-                Score = Convert.ToDouble(reader["AvgScore"]),
-                // Use extra read for display data; for chart we use Score as AvgScore
+                StudentCount = Convert.ToInt32(reader["StudentCount"]),
+                AvgScore = Convert.ToDouble(reader["AvgScore"]),
+                MinScore = Convert.ToDouble(reader["MinScore"]),
+                MaxScore = Convert.ToDouble(reader["MaxScore"])
             });
         return list;
     }
 
-    public Dictionary<string, double> GetGradeDistribution()
+    public Dictionary<string, int> GetGradeDistribution()
     {
-        var dist = new Dictionary<string, double>
+        var dist = new Dictionary<string, int>
         {
             ["90-100"] = 0, ["80-89"] = 0, ["70-79"] = 0,
             ["60-69"] = 0, ["<60"] = 0

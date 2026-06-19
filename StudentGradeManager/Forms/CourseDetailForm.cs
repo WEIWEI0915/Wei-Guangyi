@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using StudentGradeManager.Data;
 using StudentGradeManager.Models;
 
@@ -87,7 +88,10 @@ public class CourseDetailForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"保存失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (ex is SqliteException { SqliteErrorCode: 19 })
+                MessageBox.Show("课程编号已存在，请检查后重新输入。", "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            else
+                MessageBox.Show($"保存失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 }

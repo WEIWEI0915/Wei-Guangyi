@@ -40,6 +40,8 @@ public partial class MainForm : Form
         BuildCoursesTab();
         BuildGradesTab();
         BuildStatisticsTab();
+
+        _tabControl.SelectedIndexChanged += (_, _) => RefreshCurrentTab();
     }
 
     // ========== Students Tab ==========
@@ -271,7 +273,7 @@ public partial class MainForm : Form
         {
             课程编号 = s.CourseId,
             课程名称 = s.CourseName,
-            平均分 = s.Score
+            平均分 = s.AvgScore
         }).ToList();
 
         _chartDist.Series.Clear();
@@ -326,12 +328,20 @@ public partial class MainForm : Form
         }
     }
 
+    private void RefreshCurrentTab()
+    {
+        switch (_tabControl.SelectedIndex)
+        {
+            case 0: LoadStudents(); break;
+            case 1: LoadCourses(); break;
+            case 2: LoadGrades(); break;
+            case 3: LoadStatistics(); break;
+        }
+    }
+
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        LoadStudents();
-        LoadCourses();
-        LoadGrades();
-        LoadStatistics();
+        RefreshCurrentTab();
     }
 }
