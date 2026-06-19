@@ -1,5 +1,6 @@
 namespace StudentGradeManager.Models;
 
+// 课程实体，属性与 Courses 表字段一一对应
 public class Course
 {
     public string CourseId { get; set; } = string.Empty;

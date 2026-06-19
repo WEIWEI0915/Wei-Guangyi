@@ -1,19 +1,22 @@
 using Microsoft.Data.Sqlite;
+using StudentGradeManager.Interfaces;
 using StudentGradeManager.Models;
 
 namespace StudentGradeManager.Data;
 
-public class DatabaseHelper
+public class DatabaseHelper : IDatabaseHelper
 {
     private readonly string _connectionString;
 
     public DatabaseHelper(string dbPath)
     {
         _connectionString = $"Data Source={dbPath}";
+        // 初始化如果失败会让异常往上抛，由 Program.cs 统一处理并提示用户
         InitializeDatabase();
         SeedData();
     }
 
+    // 数据库初始化：创建 Students / Courses / Grades 三张表（幂等，IF NOT EXISTS）
     private void InitializeDatabase()
     {
         using var conn = new SqliteConnection(_connectionString);
@@ -47,6 +50,8 @@ public class DatabaseHelper
         cmd.ExecuteNonQuery();
     }
 
+    // 首次运行时插入演示数据（12 名学生、6 门课程、29 条成绩记录）
+    // 整个插入过程在一个事务中，防止部分写入导致外键约束失败或数据不一致
     public void SeedData()
     {
         using var conn = new SqliteConnection(_connectionString);
@@ -55,7 +60,9 @@ public class DatabaseHelper
         countCmd.CommandText = "SELECT COUNT(*) FROM Students";
         if ((long)countCmd.ExecuteScalar()! > 0) return;
 
+        using var tx = conn.BeginTransaction();
         var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
 
         cmd.CommandText = """
             INSERT INTO Students VALUES
@@ -119,10 +126,12 @@ public class DatabaseHelper
                 ('2024012', 'CS105', 92.5, '2026-06-15');
             """;
         cmd.ExecuteNonQuery();
+        tx.Commit();
     }
 
-    // ===== Students =====
+    // ============================== 学生 CRUD ==============================
 
+    // 获取全部学生列表，按学号排序
     public List<Student> GetAllStudents()
     {
         var list = new List<Student>();
@@ -143,6 +152,7 @@ public class DatabaseHelper
         return list;
     }
 
+    // 插入学生记录（使用参数化查询防止 SQL 注入）
     public void InsertStudent(Student s)
     {
         using var conn = new SqliteConnection(_connectionString);
@@ -157,6 +167,7 @@ public class DatabaseHelper
         cmd.ExecuteNonQuery();
     }
 
+    // 以学号为条件更新除主键外的全部字段
     public void UpdateStudent(Student s)
     {
         using var conn = new SqliteConnection(_connectionString);
@@ -171,16 +182,21 @@ public class DatabaseHelper
         cmd.ExecuteNonQuery();
     }
 
+    // 级联删除学生及其关联成绩（使用事务保证原子性）
     public void DeleteStudent(string studentId)
     {
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
+        using var tx = conn.BeginTransaction();
         var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
         cmd.CommandText = "DELETE FROM Grades WHERE StudentId=@id; DELETE FROM Students WHERE StudentId=@id";
         cmd.Parameters.AddWithValue("@id", studentId);
         cmd.ExecuteNonQuery();
+        tx.Commit();
     }
 
+    // 按学号 / 姓名 / 班级模糊搜索
     public List<Student> SearchStudents(string keyword)
     {
         var list = new List<Student>();
@@ -202,8 +218,9 @@ public class DatabaseHelper
         return list;
     }
 
-    // ===== Courses =====
+    // ============================== 课程 CRUD ==============================
 
+    // 获取全部课程列表，按课程编号排序
     public List<Course> GetAllCourses()
     {
         var list = new List<Course>();
@@ -249,18 +266,44 @@ public class DatabaseHelper
         cmd.ExecuteNonQuery();
     }
 
+    // 级联删除课程及其关联成绩（使用事务保证原子性）
     public void DeleteCourse(string courseId)
     {
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
+        using var tx = conn.BeginTransaction();
         var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
         cmd.CommandText = "DELETE FROM Grades WHERE CourseId=@id; DELETE FROM Courses WHERE CourseId=@id";
         cmd.Parameters.AddWithValue("@id", courseId);
         cmd.ExecuteNonQuery();
+        tx.Commit();
     }
 
-    // ===== Grades =====
+    // 按课程编号 / 名称 / 授课教师模糊搜索
+    public List<Course> SearchCourses(string keyword)
+    {
+        var list = new List<Course>();
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM Courses WHERE CourseId LIKE @kw OR Name LIKE @kw OR Teacher LIKE @kw ORDER BY CourseId";
+        cmd.Parameters.AddWithValue("@kw", $"%{keyword}%");
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            list.Add(new Course
+            {
+                CourseId = reader["CourseId"].ToString()!,
+                Name = reader["Name"].ToString()!,
+                Credits = Convert.ToDouble(reader["Credits"]),
+                Teacher = reader["Teacher"].ToString()!
+            });
+        return list;
+    }
 
+    // ============================== 成绩 CRUD ==============================
+
+    // 联合查询成绩 + 学生姓名 + 课程名称（JOIN 三张表）
     public List<Grade> GetAllGrades()
     {
         var list = new List<Grade>();
@@ -327,8 +370,41 @@ public class DatabaseHelper
         cmd.ExecuteNonQuery();
     }
 
-    // ===== Statistics =====
+    // 按学生姓名 / 课程名称模糊搜索成绩（JOIN 后对展示字段做 LIKE）
+    public List<Grade> SearchGrades(string keyword)
+    {
+        var list = new List<Grade>();
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT g.Id, g.StudentId, g.CourseId, g.Score, g.ExamDate,
+                   s.Name AS StudentName, c.Name AS CourseName
+            FROM Grades g
+            JOIN Students s ON g.StudentId = s.StudentId
+            JOIN Courses c ON g.CourseId = c.CourseId
+            WHERE s.Name LIKE @kw OR c.Name LIKE @kw
+            ORDER BY g.Id
+            """;
+        cmd.Parameters.AddWithValue("@kw", $"%{keyword}%");
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            list.Add(new Grade
+            {
+                Id = Convert.ToInt32(reader["Id"]),
+                StudentId = reader["StudentId"].ToString()!,
+                CourseId = reader["CourseId"].ToString()!,
+                Score = Convert.ToDouble(reader["Score"]),
+                ExamDate = reader["ExamDate"].ToString()!,
+                StudentName = reader["StudentName"].ToString()!,
+                CourseName = reader["CourseName"].ToString()!
+            });
+        return list;
+    }
 
+    // ============================== 统计查询 ==============================
+
+    // 按课程分组统计：平均分 / 最高分 / 最低分 / 人数（LEFT JOIN 保证无成绩的课程也显示）
     public List<CourseStatsDto> GetGradeStatsByCourse()
     {
         var list = new List<CourseStatsDto>();
@@ -359,6 +435,7 @@ public class DatabaseHelper
         return list;
     }
 
+    // 读取全部成绩后，在内存中分桶统计五个分数段（90-100 / 80-89 / 70-79 / 60-69 / <60）的人数
     public Dictionary<string, int> GetGradeDistribution()
     {
         var dist = new Dictionary<string, int>

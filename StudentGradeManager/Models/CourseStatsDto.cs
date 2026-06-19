@@ -1,5 +1,6 @@
 namespace StudentGradeManager.Models;
 
+// 统计报表 DTO：按课程分组的平均分 / 最高分 / 最低分 / 学生数
 public class CourseStatsDto
 {
     public string CourseId { get; set; } = string.Empty;

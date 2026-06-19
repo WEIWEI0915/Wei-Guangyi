@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using StudentGradeManager.Data;
 using StudentGradeManager.Models;
+using StudentGradeManager.Theme;
 
 namespace StudentGradeManager.Forms;
 
@@ -17,35 +18,42 @@ public class CourseDetailForm : Form
         _db = db;
         _existing = existing;
         Text = existing == null ? "添加课程" : "编辑课程";
-        Size = new Size(400, 240);
+        Size = new Size(420, 260);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
+        MinimizeBox = false;
+        AppTheme.ApplyFormStyle(this);
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(10) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(12) };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        layout.Controls.Add(new Label { Text = "课程编号：", TextAlign = ContentAlignment.MiddleRight }, 0, 0);
-        _txtCourseId = new TextBox { Dock = DockStyle.Fill };
-        layout.Controls.Add(_txtCourseId, 1, 0);
+        void AddRow(string label, Control ctrl, int row)
+        {
+            layout.Controls.Add(new Label { Text = label, Font = AppTheme.BodyFont, ForeColor = AppTheme.TextPrimary, TextAlign = ContentAlignment.MiddleRight, Dock = DockStyle.Fill }, 0, row);
+            layout.Controls.Add(ctrl, 1, row);
+        }
 
-        layout.Controls.Add(new Label { Text = "课程名称：", TextAlign = ContentAlignment.MiddleRight }, 0, 1);
-        _txtName = new TextBox { Dock = DockStyle.Fill };
-        layout.Controls.Add(_txtName, 1, 1);
+        _txtCourseId = new TextBox { Dock = DockStyle.Fill, Font = AppTheme.BodyFont, MaxLength = ValidationHelper.Limits.CourseIdMax };
+        AddRow("课程编号：", _txtCourseId, 0);
 
-        layout.Controls.Add(new Label { Text = "学分：", TextAlign = ContentAlignment.MiddleRight }, 0, 2);
-        _numCredits = new NumericUpDown { Dock = DockStyle.Fill, DecimalPlaces = 1, Minimum = 0, Maximum = 20 };
-        layout.Controls.Add(_numCredits, 1, 2);
+        _txtName = new TextBox { Dock = DockStyle.Fill, Font = AppTheme.BodyFont, MaxLength = ValidationHelper.Limits.NameMax };
+        AddRow("课程名称：", _txtName, 1);
 
-        layout.Controls.Add(new Label { Text = "授课教师：", TextAlign = ContentAlignment.MiddleRight }, 0, 3);
-        _txtTeacher = new TextBox { Dock = DockStyle.Fill };
-        layout.Controls.Add(_txtTeacher, 1, 3);
+        _numCredits = new NumericUpDown { Dock = DockStyle.Fill, DecimalPlaces = 1, Minimum = 0, Maximum = 20, Font = AppTheme.BodyFont };
+        AddRow("学分：", _numCredits, 2);
 
-        var btnPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        var btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, AutoSize = true };
-        var btnSave = new Button { Text = "保存", AutoSize = true };
+        _txtTeacher = new TextBox { Dock = DockStyle.Fill, Font = AppTheme.BodyFont, MaxLength = ValidationHelper.Limits.TeacherMax };
+        AddRow("授课教师：", _txtTeacher, 3);
+
+        var btnPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(0, 8, 0, 0) };
+        var btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, FlatStyle = FlatStyle.Flat, Font = AppTheme.BodyFont, AutoSize = true, Padding = new Padding(12, 4, 12, 4) };
+        var btnSave = AppTheme.CreateButton("保存");
         btnPanel.Controls.AddRange(new Control[] { btnCancel, btnSave });
         layout.Controls.Add(btnPanel, 0, 4);
         layout.SetColumnSpan(btnPanel, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         Controls.Add(layout);
         CancelButton = btnCancel;
@@ -62,13 +70,21 @@ public class CourseDetailForm : Form
         }
     }
 
+    private bool ValidateInput()
+    {
+        var err = ValidationHelper.FirstError(
+            ValidationHelper.ValidateCourseId(_txtCourseId.Text),
+            ValidationHelper.ValidateCourseName(_txtName.Text),
+            ValidationHelper.ValidateTeacher(_txtTeacher.Text)
+        );
+        if (err == null) return true;
+        MessageBox.Show(err, "输入校验", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        return false;
+    }
+
     private void BtnSave_Click(object? sender, EventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_txtCourseId.Text) || string.IsNullOrWhiteSpace(_txtName.Text))
-        {
-            MessageBox.Show("课程编号和名称为必填项。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
+        if (!ValidateInput()) return;
 
         var course = new Course
         {

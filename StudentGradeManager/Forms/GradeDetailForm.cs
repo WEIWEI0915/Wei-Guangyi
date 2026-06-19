@@ -1,5 +1,6 @@
 using StudentGradeManager.Data;
 using StudentGradeManager.Models;
+using StudentGradeManager.Theme;
 
 namespace StudentGradeManager.Forms;
 
@@ -17,39 +18,46 @@ public class GradeDetailForm : Form
         _db = db;
         _existing = existing;
         Text = existing == null ? "录入成绩" : "编辑成绩";
-        Size = new Size(450, 240);
+        Size = new Size(460, 260);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
+        MinimizeBox = false;
+        AppTheme.ApplyFormStyle(this);
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(10) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(12) };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        layout.Controls.Add(new Label { Text = "学生：", TextAlign = ContentAlignment.MiddleRight }, 0, 0);
-        _cmbStudent = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        void AddRow(string label, Control ctrl, int row)
+        {
+            layout.Controls.Add(new Label { Text = label, Font = AppTheme.BodyFont, ForeColor = AppTheme.TextPrimary, TextAlign = ContentAlignment.MiddleRight, Dock = DockStyle.Fill }, 0, row);
+            layout.Controls.Add(ctrl, 1, row);
+        }
+
+        _cmbStudent = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.BodyFont };
         _cmbStudent.DisplayMember = "DisplayText";
         _cmbStudent.ValueMember = "StudentId";
-        layout.Controls.Add(_cmbStudent, 1, 0);
+        AddRow("学生：", _cmbStudent, 0);
 
-        layout.Controls.Add(new Label { Text = "课程：", TextAlign = ContentAlignment.MiddleRight }, 0, 1);
-        _cmbCourse = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        _cmbCourse = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.BodyFont };
         _cmbCourse.DisplayMember = "DisplayText";
         _cmbCourse.ValueMember = "CourseId";
-        layout.Controls.Add(_cmbCourse, 1, 1);
+        AddRow("课程：", _cmbCourse, 1);
 
-        layout.Controls.Add(new Label { Text = "成绩：", TextAlign = ContentAlignment.MiddleRight }, 0, 2);
-        _numScore = new NumericUpDown { Dock = DockStyle.Fill, DecimalPlaces = 1, Minimum = 0, Maximum = 100 };
-        layout.Controls.Add(_numScore, 1, 2);
+        _numScore = new NumericUpDown { Dock = DockStyle.Fill, DecimalPlaces = 1, Minimum = 0, Maximum = 100, Font = AppTheme.BodyFont };
+        AddRow("成绩：", _numScore, 2);
 
-        layout.Controls.Add(new Label { Text = "考试日期：", TextAlign = ContentAlignment.MiddleRight }, 0, 3);
-        _dtpExam = new DateTimePicker { Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short };
-        layout.Controls.Add(_dtpExam, 1, 3);
+        _dtpExam = new DateTimePicker { Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short, Font = AppTheme.BodyFont, MaxDate = DateTime.Today };
+        AddRow("考试日期：", _dtpExam, 3);
 
-        var btnPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        var btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, AutoSize = true };
-        var btnSave = new Button { Text = "保存", AutoSize = true };
+        var btnPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(0, 8, 0, 0) };
+        var btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, FlatStyle = FlatStyle.Flat, Font = AppTheme.BodyFont, AutoSize = true, Padding = new Padding(12, 4, 12, 4) };
+        var btnSave = AppTheme.CreateButton("保存");
         btnPanel.Controls.AddRange(new Control[] { btnCancel, btnSave });
         layout.Controls.Add(btnPanel, 0, 4);
         layout.SetColumnSpan(btnPanel, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         Controls.Add(layout);
         CancelButton = btnCancel;
@@ -77,19 +85,35 @@ public class GradeDetailForm : Form
         _cmbCourse.DataSource = courses.Select(c => new { c.CourseId, DisplayText = $"{c.CourseId} - {c.Name}" }).ToList();
     }
 
-    private void BtnSave_Click(object? sender, EventArgs e)
+    private bool ValidateInput()
     {
+        if (_cmbStudent.Items.Count == 0)
+        {
+            MessageBox.Show("没有学生数据，请先添加学生。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+        if (_cmbCourse.Items.Count == 0)
+        {
+            MessageBox.Show("没有课程数据，请先添加课程。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
         if (_cmbStudent.SelectedValue == null || _cmbCourse.SelectedValue == null)
         {
             MessageBox.Show("请选择学生和课程。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
+            return false;
         }
+        return true;
+    }
+
+    private void BtnSave_Click(object? sender, EventArgs e)
+    {
+        if (!ValidateInput()) return;
 
         var grade = new Grade
         {
             Id = _existing?.Id ?? 0,
-            StudentId = _cmbStudent.SelectedValue.ToString()!,
-            CourseId = _cmbCourse.SelectedValue.ToString()!,
+            StudentId = _cmbStudent.SelectedValue?.ToString() ?? "",
+            CourseId = _cmbCourse.SelectedValue?.ToString() ?? "",
             Score = (double)_numScore.Value,
             ExamDate = _dtpExam.Value.ToString("yyyy-MM-dd")
         };
